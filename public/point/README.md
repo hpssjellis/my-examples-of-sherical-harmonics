@@ -22,3 +22,28 @@ The sphere is defined by **32 width segments** and **32 height segments**. There
 You must calculate and output the exact X, Y, and Z coordinates for all **1089 vertices** that form the surface of a perfect sphere of radius 50, given those segment counts. The final "positions" array will contain exactly **3267** (1089 * 3) floating-point numbers.
 
 **Output ONLY the complete, valid JSON object, starting with the opening curly brace, and nothing else.**
+
+
+
+.
+.
+.
+.
+.
+
+
+new prompt
+
+
+.
+
+
+The point cloud object you must generate is a low-to-medium resolution point cloud representation of a DOG (such as a German Shepherd or Labrador).
+
+The dog should be standing upright and centered around the origin (0, 0, 0).
+
+To ensure a visible and detailed shape, the point cloud should contain between 1,500 and 3,000 vertices. The coordinates should be scaled such that the longest dimension of the dog is approximately 100 units (e.g., from head to tail).
+
+Calculate and output the exact X, Y, and Z coordinates for all vertices. The final "positions" array will contain exactly three times the number of vertices.
+
+Output ONLY the complete, valid JSON object, starting with the opening curly brace, and nothing else.
