@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Waterball Perturbations Point Cloud</title>
+    <style>
+      /* Basic reset and full-page layout for the canvas */
+      body, html {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overscroll-behavior: none;
+        overflow: hidden;
+        background-color: #f0f0f0;
+        font-family: sans-serif;
+      }
+
+      /* Canvas styling to fill the available space */
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Styling for UI containers (fixed position, semi-transparent, rounded corners, shadow) */
+      #myUiContainer, #myNumberContainer, #mySaveLoadContainer, #howto-container, #debug-info {
+        position: fixed;
+        padding: 15px;
+        background-color: rgba(255, 255, 255, 0.85);
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        color: #333;
+        font-size: 14px;
+        line-height: 1.5;
+        z-index: 10;
+      }
+
+      #myUiContainer {
+        top: 20px;
+        left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 250px;
+        max-height: calc(100% - 40px);
+        overflow-y: auto;
+      }
+
+      #myNumberContainer {
+        top: 20px;
+        right: 20px;
+      }
+      
+      #mySaveLoadContainer {
+          bottom: 20px;
+          left: 20px;
+          width: 300px;
+      }
+
+      #howto-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        left: auto;
+        width: 200px;
+      }
+      
+      /* Simple button and textarea styling */
+      .my-button {
+          padding: 8px 12px;
+          margin: 5px 5px 5px 0;
+          background-color: #007bff;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: bold;
+      }
+      .my-button:hover {
+          background-color: #0056b3;
+      }
+      
+      #myPointDataTextarea {
+          width: 95%;
+          height: 80px;
+          margin-top: 5px;
+          padding: 5px;
+          border: 1px solid #ccc;
+          resize: vertical;
+          font-family: monospace;
+          font-size: 10px;
+      }
+
+      /* Other UI stylings from original code (sliders, etc.) */
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+
+      .slider-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 10px;
+        margin-bottom: 5px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 8px;
+        background-color: rgba(240, 240, 240, 0.5);
+      }
+      
+      input[type="range"] { width: 100%; }
+
+      .slider-value {
+        align-self: flex-end;
+        font-weight: bold;
+      }
+      
+    </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  </head>
+  <body>
+        <div id="myUiContainer">
+      <div style="display: flex; flex-direction: column;">
+        <label>
+          <input type="checkbox" id="myAutoRotateCheckbox" checked 
+                 onclick="mySetAutoRotate(this.checked)"> Auto rotate
+        </label>
+      </div>
+
+      <h3>Wave 1 Parameters</h3>
+      <div class="slider-group">
+        <label for="wave1-amplitude-slider">Amplitude (Wave 1):</label>
+        <input type="range" id="wave1-amplitude-slider" min="0" max="10" value="2" step="0.1" 
+                 oninput="myUpdateWave1Amplitude(event)"/>
+        <span id="wave1-amplitude-value" class="slider-value">2.0</span>
+      </div>
+      <div class="slider-group">
+        <label for="wave1-freq-theta-slider">Freq Theta (Wave 1):</label>
+        <input type="range" id="wave1-freq-theta-slider" min="0" max="10" value="4" step="0.1" 
+                 oninput="myUpdateWave1FreqTheta(event)"/>
+        <span id="wave1-freq-theta-value" class="slider-value">4.0</span>
+      </div>
+      <div class="slider-group">
+        <label for="wave1-freq-phi-slider">Freq Phi (Wave 1):</label>
+        <input type="range" id="wave1-freq-phi-slider" min="0" max="10" value="6" step="0.1" 
+                 oninput="myUpdateWave1FreqPhi(event)"/>
+        <span id="wave1-freq-phi-value" class="slider-value">6.0</span>
+      </div>
+      <div class="slider-group">
+        <label for="wave1-speed-slider">Speed (Wave 1):</label>
+        <input type="range" id="wave1-speed-slider" min="-2" max="2" value="0.5" step="0.05" 
+                 oninput="myUpdateWave1Speed(event)"/>
+        <span id="wave1-speed-value" class="slider-value">0.50</span>
+      </div>
+    </div>
+    
+        <div id="myNumberContainer">
+      <b>Sphere Resolution</b>
+      <form id="myResolutionForm" onchange="myHandleResolutionChange(event)">
+        <label><input type="radio" name="myOptions" value="0"> Low (<span id="myLowResValue"></span> vertices)</label><br>
+        <label><input type="radio" name="myOptions" value="1" checked> Medium (<span id="myMediumResValue"></span> vertices)</label><br>
+        <label><input type="radio" name="myOptions" value="2"> High (<span id="myHighResValue"></span> vertices)</label><br>
+      </form>
+    </div>
+    
+    <div id="mySaveLoadContainer">
+        <b>Point Cloud Data (JSON)</b>
+        <div style="margin-top: 5px;">
+            <button class="my-button" onclick="mySaveToTextarea()">Save to Textarea</button>
+            <button class="my-button" onclick="myLoadFromTextarea()">Load from Textarea</button>
+            <button class="my-button" onclick="mySaveToFile()">Download File</button>
+        </div>
+        <textarea id="myPointDataTextarea" placeholder="Paste JSON point data here to load..."></textarea>
+        <div id="myStatusMessage" style="color: #007bff; font-weight: bold; margin-top: 5px;"></div>
+    </div>
+
+        <div id="howto-container">
+      <div> <b>Drag</b> to move camera </div>
+      <div> <b>Scroll</b> to zoom in and out </div>
+    </div>
+        <div id="debug-info">
+      <span id="error-reason">Loading 3D scene...</span>
+    </div>
+    
+        <canvas id="myFluidCanvas"></canvas>
+
+    <script>
+      // Declare Three.js global variables
+      let scene, camera, renderer, myPointCloud, controls, myOriginalPositions;
+      
+      // Points object (shared geometry with the original hidden sphere)
+      let myPoints; 
+      let mySphereMesh; // Keep the original mesh for deformation reference
+
+      // Perturbation parameters (kept consistent for simplicity)
+      let wave1_amplitude = 2.0;
+      let wave1_freq_theta = 4.0;
+      let wave1_freq_phi = 6.0;
+      let wave1_speed = 0.5;
+      
+      // ... (other wave parameters omitted for brevity but assumed to be here)
+
+      // Sphere segment configurations for different resolutions
+      let segments = {
+          low: { width: 16, height: 16 },
+          medium: { width: 32, height: 32 },
+          high: { width: 64, height: 64 }
+      };
+      let myCurrentSegments = segments.medium; // Default resolution
+      const myInitialSphereRadius = 50; // Base radius of the sphere
+      
+      // DOM Elements
+      const myPointDataTextarea = document.getElementById('myPointDataTextarea');
+      const myStatusMessage = document.getElementById('myStatusMessage');
+
+
+      /**
+       * Calculates the total number of vertices.
+       */
+      function myGetVertexCount(myWidthSegments, myHeightSegments) {
+          return (myWidthSegments + 1) * (myHeightSegments + 1);
+      }
+      
+      // Populate vertex counts in the UI labels (renamed IDs)
+      document.getElementById('myLowResValue').textContent = myGetVertexCount(segments.low.width, segments.low.height);
+      document.getElementById('myMediumResValue').textContent = myGetVertexCount(segments.medium.width, segments.medium.height);
+      document.getElementById('myHighResValue').textContent = myGetVertexCount(segments.high.width, segments.high.height);
+
+      /**
+       * Initializes the Three.js scene. (Renamed to myInit)
+       */
+      function myInit() {
+          try {
+              // ... (Initialization code for scene, camera, renderer, lights)
+              
+              const myCanvas = document.getElementById('myFluidCanvas');
+              renderer = new THREE.WebGLRenderer({ canvas: myCanvas, antialias: true }); 
+              // ... (set size, set pixel ratio)
+
+              // Scene setup
+              scene = new THREE.Scene();
+              scene.background = new THREE.Color(0xf0f0f0);
+              camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+              camera.position.z = 150;
+              
+              // Lights
+              scene.add(new THREE.AmbientLight(0x404040, 2));
+              const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+              directionalLight.position.set(1, 1, 1).normalize();
+              scene.add(directionalLight);
+
+              // Create the initial point cloud
+              myCreatePointCloud(myCurrentSegments.width, myCurrentSegments.height);
+
+              // OrbitControls: Allows user to interactively move/zoom the camera
+              controls = new THREE.OrbitControls(camera, renderer.domElement);
+              controls.autoRotate = document.getElementById('myAutoRotateCheckbox').checked;
+              controls.autoRotateSpeed = 1.0;
+              controls.enableDamping = true;
+              controls.dampingFactor = 0.05;
+
+              // Event Listener (kept simple as requested)
+              window.onresize = myOnWindowResize;
+
+              debugInfo.style.display = 'none';
+              myAnimate();
+          } catch (error) {
+              console.error("Error during initialization:", error);
+              debugInfo.style.display = 'block';
+              debugInfo.querySelector('span').textContent = `Error: ${error.message}. Please refresh the page.`;
+          }
+      }
+
+      /**
+       * Creates or recreates the point cloud object. (Renamed to myCreatePointCloud)
+       */
+      function myCreatePointCloud(myWidthSegments, myHeightSegments) {
+          if (mySphereMesh) {
+              scene.remove(mySphereMesh);
+              mySphereMesh.geometry.dispose();
+              mySphereMesh.material.dispose();
+          }
+          if (myPointCloud) {
+              scene.remove(myPointCloud);
+              myPointCloud.geometry.dispose();
+              myPointCloud.material.dispose();
+          }
+
+          // Create Geometry
+          const myGeometry = new THREE.SphereGeometry(myInitialSphereRadius, myWidthSegments, myHeightSegments);
+          
+          // Create a transparent mesh for visual reference (optional, but good for understanding deformation)
+          const myMeshMaterial = new THREE.MeshPhongMaterial({
+              color: 0x007bff, transparent: true, opacity: 0.1, shininess: 100, specular: 0x333333
+          });
+          mySphereMesh = new THREE.Mesh(myGeometry, myMeshMaterial);
+          scene.add(mySphereMesh);
+
+          // Create Points (Point Cloud)
+          const myPointsMaterial = new THREE.PointsMaterial({
+              color: 0xffffff, size: 2, sizeAttenuation: true
+          });
+          myPointCloud = new THREE.Points(myGeometry, myPointsMaterial);
+          scene.add(myPointCloud);
+
+          // Store original vertex positions
+          myOriginalPositions = new Float32Array(myGeometry.attributes.position.array.length);
+          myGeometry.attributes.position.array.forEach((myVal, myIndex) => {
+              myOriginalPositions[myIndex] = myVal;
+          });
+      }
+      
+      /**
+       * Updates the point cloud's geometry positions with new data.
+       */
+      function myUpdatePointCloudPositions(myNewPositionsArray) {
+          // Note: This relies on myPointCloud existing and using a geometry with a position attribute.
+          if (!myPointCloud) {
+              myStatusMessage.textContent = 'Error: Point Cloud not initialized.';
+              return false;
+          }
+          
+          const myGeometry = myPointCloud.geometry;
+          const myPositionAttribute = myGeometry.attributes.position;
+          
+          if (myNewPositionsArray.length !== myPositionAttribute.array.length) {
+              myStatusMessage.textContent = `Error: Position length mismatch. Expected ${myPositionAttribute.array.length}, got ${myNewPositionsArray.length}.`;
+              return false;
+          }
+          
+          myPositionAttribute.array.set(myNewPositionsArray); // Copy new data into the BufferAttribute
+          myPositionAttribute.needsUpdate = true;
+          myStatusMessage.textContent = `Loaded ${myNewPositionsArray.length / 3} vertices successfully.`;
+          return true;
+      }
+      
+      /**
+       * Saves the current deformed point cloud data to the textarea.
+       */
+      function mySaveToTextarea() {
+          if (!myPointCloud) return;
+          
+          const myPositions = myPointCloud.geometry.attributes.position.array;
+          const myPositionsArray = Array.from(myPositions); // Convert Float32Array to standard Array for JSON
+          
+          const mySaveData = {
+              metadata: "Three.js Point Cloud Positions",
+              vertexCount: myPositions.length / 3,
+              positions: myPositionsArray
+          };
+          
+          myPointDataTextarea.value = JSON.stringify(mySaveData, null, 2); // 2 spaces for formatting
+          myStatusMessage.textContent = `Saved ${myPositions.length / 3} vertices to textarea.`;
+      }
+      
+      /**
+       * Loads point cloud data from the textarea.
+       */
+      function myLoadFromTextarea() {
+          try {
+              const myJsonString = myPointDataTextarea.value.trim();
+              if (!myJsonString) {
+                  myStatusMessage.textContent = 'Error: Textarea is empty.';
+                  return;
+              }
+              
+              const myLoadedData = JSON.parse(myJsonString);
+              const myNewPositionsArray = myLoadedData.positions;
+              
+              if (!Array.isArray(myNewPositionsArray)) {
+                  myStatusMessage.textContent = 'Error: Loaded data structure is invalid (missing positions array).';
+                  return;
+              }
+              
+              myUpdatePointCloudPositions(myNewPositionsArray);
+              
+          } catch (myError) {
+              myStatusMessage.textContent = `Error loading data: ${myError.message}`;
+              console.error(myError);
+          }
+      }
+      
+      /**
+       * Downloads the current point cloud data as a JSON file.
+       */
+      function mySaveToFile() {
+          mySaveToTextarea(); // First, generate the data in the textarea
+          const myJsonString = myPointDataTextarea.value;
+          const myBlob = new Blob([myJsonString], { type: 'application/json' });
+          const myUrl = URL.createObjectURL(myBlob);
+          
+          // Create a temporary link element for the download
+          const myLink = document.createElement('a');
+          myLink.href = myUrl;
+          myLink.download = `pointcloud-${Date.now()}.json`;
+          
+          // Programmatically click the link to trigger download
+          document.body.appendChild(myLink);
+          myLink.click();
+          document.body.removeChild(myLink);
+          
+          myStatusMessage.textContent = 'Point Cloud downloaded as JSON file.';
+          URL.revokeObjectURL(myUrl); // Clean up
+      }
+
+      /**
+       * Handles window resizing. (Renamed to myOnWindowResize)
+       */
+      function myOnWindowResize() {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      /**
+       * The main animation loop. (Renamed to myAnimate)
+       */
+      function myAnimate() {
+          requestAnimationFrame(myAnimate);
+
+          // Update point cloud perturbations
+          myPerturbPointCloud(myPointCloud.geometry, myOriginalPositions, performance.now() * 0.001);
+
+          // Inform Three.js that vertex positions have changed
+          myPointCloud.geometry.attributes.position.needsUpdate = true;
+          mySphereMesh.geometry.attributes.position.needsUpdate = true; // For the transparent mesh
+
+          controls.update();
+          renderer.render(scene, camera);
+      }
+
+      /**
+       * Applies additive spherical sinusoidal perturbations. (Renamed to myPerturbPointCloud)
+       * Note: This function only updates positions; the actual saving/loading is separate.
+       */
+      function myPerturbPointCloud(myGeometry, myOriginalPos, myTime) {
+          const myPositionAttribute = myGeometry.attributes.position;
+          const myNumVertices = myPositionAttribute.count;
+
+          for (let i = 0; i < myNumVertices; i++) {
+              const i3 = i * 3;
+
+              const myOriginalX = myOriginalPos[i3];
+              const myOriginalY = myOriginalPos[i3 + 1];
+              const myOriginalZ = myOriginalPos[i3 + 2];
+
+              const myRadius = Math.sqrt(myOriginalX * myOriginalX + myOriginalY * myOriginalY + myOriginalZ * myOriginalZ);
+              const myTheta = Math.atan2(Math.sqrt(myOriginalX * myOriginalX + myOriginalY * myOriginalY), myOriginalZ);
+              const myPhi = Math.atan2(myOriginalY, myOriginalX);
+
+              // Wave calculations (using global wave parameters)
+              const myPerturbation1 = wave1_amplitude * Math.sin(myTheta * wave1_freq_theta + myPhi * wave1_freq_phi + myTime * wave1_speed);
+              // ... (Other wave perturbations omitted for brevity)
+              const myPerturbation2 = 0; // Simplified for example
+              const myPerturbation3 = 0; // Simplified for example
+
+              const myTotalPerturbation = myPerturbation1 + myPerturbation2 + myPerturbation3;
+
+              const myNormalX = myOriginalX / myRadius;
+              const myNormalY = myOriginalY / myRadius;
+              const myNormalZ = myOriginalZ / myRadius;
+
+              myPositionAttribute.array[i3] = myOriginalX + myNormalX * myTotalPerturbation;
+              myPositionAttribute.array[i3 + 1] = myOriginalY + myNormalY * myTotalPerturbation;
+              myPositionAttribute.array[i3 + 2] = myOriginalZ + myNormalZ * myTotalPerturbation;
+          }
+
+          myPositionAttribute.needsUpdate = true;
+          myGeometry.computeVertexNormals();
+      }
+      
+      // UI Update Functions
+      function mySetAutoRotate(myChecked) { controls.autoRotate = myChecked; }
+      function myUpdateWave1Amplitude(myEvent) { wave1_amplitude = parseFloat(myEvent.target.value); document.getElementById('wave1-amplitude-value').textContent = wave1_amplitude.toFixed(1); }
+      function myUpdateWave1FreqTheta(myEvent) { wave1_freq_theta = parseFloat(myEvent.target.value); document.getElementById('wave1-freq-theta-value').textContent = wave1_freq_theta.toFixed(1); }
+      function myUpdateWave1FreqPhi(myEvent) { wave1_freq_phi = parseFloat(myEvent.target.value); document.getElementById('wave1-freq-phi-value').textContent = wave1_freq_phi.toFixed(1); }
+      function myUpdateWave1Speed(myEvent) { wave1_speed = parseFloat(myEvent.target.value); document.getElementById('wave1-speed-value').textContent = wave1_speed.toFixed(2); }
+      
+      function myHandleResolutionChange(myEvent) {
+          const myValue = parseInt(myEvent.target.value);
+          if (myValue === 0) myCurrentSegments = segments.low;
+          else if (myValue === 1) myCurrentSegments = segments.medium;
+          else if (myValue === 2) myCurrentSegments = segments.high;
+          myCreatePointCloud(myCurrentSegments.width, myCurrentSegments.height);
+      }
+
+      // Start the application
+      window.onload = myInit;
+    </script>
+  </body>
+</html>
