@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JSON Point Cloud Generator</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1 { font-size: 1.5em; }
+        /* Minimal inline CSS preference */
+        #myJsonOutput { 
+            width: 100%; 
+            height: 500px; 
+            margin-top: 15px; 
+            padding: 10px; 
+            font-family: monospace; 
+            font-size: 0.9em; 
+            white-space: pre; 
+            overflow: auto; 
+            border: 1px solid #ccc; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Copy the JSON Output Below</h1>
+    <p>This script generates 5,000 points in a simple capsule shape for your Three.js dog point cloud.</p>
+    <textarea id="myJsonOutput"></textarea>
+
+    <script>
+        // Set the desired number of points
+        const MY_TOTAL_POINTS = 5000;
+        
+        // Function to generate coordinates for a simple capsule/cylinder shape
+        function myShapeDogBody(myNumPoints) {
+            const myPositions = [];
+            
+            // Parameters for the capsule shape
+            const myBodyRadius = 1.0;
+            const myBodyLength = 2.5;
+            const myHeadOffset = 0.5;
+
+            for (let i = 0; i < myNumPoints; i++) {
+                // Generate a random position (x, y, z) inside the bounding box
+                let myX = (Math.random() * 2 - 1) * myBodyLength / 2; // -1.25 to 1.25
+                let myY = (Math.random() * 2 - 1) * myBodyRadius;     // -1.0 to 1.0
+                let myZ = (Math.random() * 2 - 1) * myBodyRadius;     // -1.0 to 1.0
+
+                // Simple check to keep points roughly within a cylinder/capsule shape
+                // This simulates the main body
+                if (Math.abs(myX) < myBodyLength / 2 - myBodyRadius) {
+                    // Inside the middle part of the cylinder
+                    if (myY * myY + myZ * myZ > myBodyRadius * myBodyRadius) {
+                        continue; // Skip points outside the circle cross-section
+                    }
+                } else {
+                    // Ends of the cylinder (spherical caps)
+                    let myEndDistSq = (Math.abs(myX) - (myBodyLength / 2 - myBodyRadius));
+                    if (myEndDistSq * myEndDistSq + myY * myY + myZ * myZ > myBodyRadius * myBodyRadius) {
+                         continue; // Skip points outside the spherical end
+                    }
+                }
+                
+                // Add a small cluster for a "head" near one end (positive X)
+                if (Math.random() < 0.1) { // 10% chance to place a "head" point
+                     myX = myBodyLength / 2 + myHeadOffset + (Math.random() * 0.4 - 0.2);
+                     myY = Math.random() * 0.5; // Slightly higher
+                     myZ = Math.random() * 0.5 - 0.25; // Slightly off center
+                }
+
+                // Add the position to the array
+                myPositions.push(
+                    parseFloat(myX.toFixed(3)), // Use toFixed(3) for smaller file size
+                    parseFloat(myY.toFixed(3)),
+                    parseFloat(myZ.toFixed(3))
+                );
+
+                // Stop if we have generated enough points
+                if (myPositions.length / 3 >= myNumPoints) break;
+            }
+
+            return myPositions;
+        }
+
+        // Main function to build and display the JSON
+        async function myGenerateJson() {
+            const myPositionsArray = myShapeDogBody(MY_TOTAL_POINTS);
+
+            const myDogJson = {
+                "myPointCount": myPositionsArray.length / 3,
+                "myPositionsArray": myPositionsArray
+            };
+
+            const myOutputElement = document.getElementById("myJsonOutput");
+            
+            // Format the JSON with 2-space indentation for readability
+            myOutputElement.value = JSON.stringify(myDogJson, null, 2);
+        }
+
+        myGenerateJson();
+    </script>
+</body>
+</html>
