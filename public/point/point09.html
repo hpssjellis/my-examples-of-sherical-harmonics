@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimal Static Point Cloud Viewer</title>
+    <style>
+      /* Minimal inline CSS for layout and UI */
+      body, html {
+        height: 100%; width: 100%; margin: 0; display: flex;
+        justify-content: center; align-items: center; overflow: hidden;
+        background-color: #333; font-family: sans-serif;
+      }
+      canvas { width: 100%; height: 100%; display: block; }
+      #myUiContainer, #mySaveLoadContainer, #howto-container, #debug-info {
+        position: fixed; padding: 10px; background-color: rgba(255, 255, 255, 0.85);
+        border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); color: #333;
+        font-size: 14px; z-index: 10;
+      }
+      #myUiContainer { top: 10px; left: 10px; }
+      #mySaveLoadContainer { bottom: 10px; left: 10px; width: 280px; }
+      #howto-container { bottom: 10px; right: 10px; width: 180px; }
+      .my-button { padding: 5px 8px; margin: 3px 3px 3px 0; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+      .my-button:hover { background-color: #0056b3; }
+      #myPointDataTextarea { width: 95%; height: 60px; margin-top: 5px; padding: 5px; border: 1px solid #ccc; resize: vertical; font-family: monospace; font-size: 10px; }
+      #myFileLoader { padding: 5px; background-color: #f7f7f7; border-radius: 4px; }
+      .slider-value { font-weight: bold; }
+    </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  </head>
+  <body>
+        <div id="myUiContainer">
+      <h3>Settings</h3>
+      <label>
+        <input type="checkbox" id="myAutoRotateCheckbox" checked
+             onclick="mySetAutoRotate(this.checked)"> Auto Rotate
+      </label>
+
+      <div style="margin-top: 10px;">
+        <label for="myPointSizeSlider">Point Size:</label>
+        <input type="range" id="myPointSizeSlider" min="0.5" max="10" value="3" step="0.5"
+             oninput="myUpdatePointSize(event)"/>
+        <span id="myPointSizeValue" class="slider-value">3.0</span>
+      </div>
+    </div>
+
+
+        <div id="mySaveLoadContainer">
+        <b>Point Cloud Data (JSON)</b>
+        <div style="margin-top: 5px;">
+            <button class="my-button" onclick="mySaveToTextarea()">Save Current</button>
+            <button class="my-button" onclick="myLoadFromTextarea()">Load Textarea</button>
+            <button class="my-button" onclick="mySaveToFile()">Download File</button>
+        </div>
+        <textarea id="myPointDataTextarea" placeholder="Paste JSON point data here to load..."></textarea>
+        <div id="myStatusMessage" style="color: #007bff; font-weight: bold; margin-top: 5px;">Awaiting file load...</div>
+
+        <hr style="border: 0; height: 1px; background-color: #ccc; margin: 10px 0;">
+
+                <div id="myFileLoader">
+            Load from JSON File:
+            <input type="file" accept=".json" onchange="myLoadFromFile(event)" style="display: block; margin-top: 5px;">
+        </div>
+    </div>
+
+        <div id="howto-container">
+        <div> <b>Drag</b> to orbit the model </div>
+        <div> <b>Scroll</b> to zoom </div>
+        <div> <b>Mouseover</b> to highlight points </div>
+    </div>
+
+        <div id="debug-info" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; padding: 5px; border-radius: 4px;">
+      <span id="error-reason">Loading 3D scene...</span>
+    </div>
+
+        <canvas id="myFluidCanvas"></canvas>
+
+    <script>
+      // Declare Three.js global variables
+      let scene, camera, renderer, myPointCloud, controls;
+
+      // --- MOUSE INTERACTION (RAYCASTING) VARIABLES ---
+      let myRaycaster;
+      let myMousePosition = new THREE.Vector2();
+      let myHighlightedPoint = null;
+      let myDefaultColor = new THREE.Color(0xffffff); // White
+      let myHighlightColor = new THREE.Color(0xff0000); // Red
+
+      // DOM Elements
+      const myDebugInfo = document.getElementById('debug-info');
+      const myPointDataTextarea = document.getElementById('myPointDataTextarea');
+      const myStatusMessage = document.getElementById('myStatusMessage');
+
+
+      /**
+       * Initializes the Three.js scene.
+       */
+      function myInit() {
+          try {
+              myDebugInfo.style.display = 'block';
+              myDebugInfo.querySelector('span').textContent = 'Initializing 3D scene...';
+
+              const myCanvas = document.getElementById('myFluidCanvas');
+              renderer = new THREE.WebGLRenderer({ canvas: myCanvas, antialias: true });
+              renderer.setSize(window.innerWidth, window.innerHeight);
+              renderer.setPixelRatio(window.devicePixelRatio);
+
+              scene = new THREE.Scene();
+              scene.background = new THREE.Color(0x333333);
+              camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+              camera.position.z = 150;
+
+              // Initialize controls BEFORE creating the point cloud so controls.target can be set
+              controls = new THREE.OrbitControls(camera, renderer.domElement);
+              controls.autoRotate = document.getElementById('myAutoRotateCheckbox').checked;
+              controls.enableDamping = true;
+              controls.dampingFactor = 0.05;
+              
+              // --- CALL WITH NO ARGUMENTS TO CREATE DEFAULT CUBE ---
+              myCreatePointCloud();
+
+
+              myRaycaster = new THREE.Raycaster();
+              // ⭐️ FIX: Increased raycaster threshold for better mouse interaction with small points
+              myRaycaster.params.Points.threshold = 20; 
+
+              window.addEventListener('mousemove', (myEvent) => {
+                  myMousePosition.x = (myEvent.clientX / window.innerWidth) * 2 - 1;
+                  myMousePosition.y = -(myEvent.clientY / window.innerHeight) * 2 + 1;
+              });
+
+              window.onresize = myOnWindowResize;
+
+              myDebugInfo.style.display = 'none';
+              myAnimate();
+          } catch (error) {
+              console.error("Error during initialization:", error);
+              myDebugInfo.style.display = 'block';
+              myDebugInfo.querySelector('span').textContent = `Error: ${error.message}.`;
+          }
+      }
+
+      /**
+       * Creates or recreates the point cloud object.
+       * If no array is provided, it defaults to a simple 3x3x3 grid (27 points).
+       */
+      function myCreatePointCloud(myPositionsArray = null) {
+          // Dispose of old point cloud object
+          if (myPointCloud) {
+              scene.remove(myPointCloud);
+              myPointCloud.geometry.dispose();
+              myPointCloud.material.dispose();
+          }
+
+          let myGeometry = new THREE.BufferGeometry();
+          let myFinalPositions;
+          let myVertexCount;
+
+          if (myPositionsArray && myPositionsArray.length > 0) {
+              // Use loaded data
+              myFinalPositions = new Float32Array(myPositionsArray);
+              myVertexCount = myFinalPositions.length / 3;
+          } else {
+              // Create default 3x3x3 cube (27 points)
+              // ⭐️ FIX: Increased the size to make the points visible from the default camera position.
+              const myCubeSize = 100; 
+              myVertexCount = 27;
+              myFinalPositions = new Float32Array(myVertexCount * 3);
+              let index = 0;
+              for (let x = -1; x <= 1; x++) {
+                  for (let y = -1; y <= 1; y++) {
+                      for (let z = -1; z <= 1; z++) {
+                          myFinalPositions[index++] = x * myCubeSize;
+                          myFinalPositions[index++] = y * myCubeSize;
+                          myFinalPositions[index++] = z * myCubeSize;
+                      }
+                  }
+              }
+              myStatusMessage.textContent = 'Loaded default 27-point cube.';
+          }
+
+          myGeometry.setAttribute('position', new THREE.BufferAttribute(myFinalPositions, 3));
+
+
+          // Add vertex colors (required for highlighting)
+          const myColorArray = new Float32Array(myVertexCount * 3);
+          for (let i = 0; i < myColorArray.length; i += 3) {
+              myColorArray[i] = myDefaultColor.r;
+              myColorArray[i + 1] = myDefaultColor.g;
+              myColorArray[i + 2] = myDefaultColor.b;
+          }
+          myGeometry.setAttribute('color', new THREE.BufferAttribute(myColorArray, 3));
+
+
+          // Create Points Material, reading the slider value directly
+          const myPointsMaterial = new THREE.PointsMaterial({
+              vertexColors: true,
+              size: parseFloat(document.getElementById('myPointSizeSlider').value),
+              sizeAttenuation: true
+          });
+          myPointCloud = new THREE.Points(myGeometry, myPointsMaterial);
+          scene.add(myPointCloud);
+
+          myHighlightedPoint = null;
+
+          // Center the view on the new object
+          if (myPointCloud.geometry.boundingBox === null) myPointCloud.geometry.computeBoundingBox();
+          const myCenter = new THREE.Vector3();
+          myPointCloud.geometry.boundingBox.getCenter(myCenter);
+          controls.target.copy(myCenter);
+          controls.update(); 
+      }
+
+
+      /**
+       * Loads point cloud positions by replacing the current geometry.
+       */
+      function myUpdatePointCloudPositions(myNewPositionsArray) {
+          myCreatePointCloud(myNewPositionsArray);
+          myStatusMessage.textContent = `Loaded ${myNewPositionsArray.length / 3} vertices successfully.`;
+      }
+
+      /**
+       * Saves the current point cloud data to the textarea.
+       */
+      function mySaveToTextarea() {
+          if (!myPointCloud) return;
+
+          const myPositions = myPointCloud.geometry.attributes.position.array;
+          const myPositionsArray = Array.from(myPositions);
+
+          const mySaveData = {
+              metadata: "Static Point Cloud Positions (X, Y, Z coordinates)",
+              vertexCount: myPositions.length / 3,
+              segments: { width: 32, height: 32 },
+              positions: myPositionsArray
+          };
+
+          // Use JSON.stringify for clean, standard JSON output
+          myPointDataTextarea.value = JSON.stringify(mySaveData, null, 2);
+          myStatusMessage.textContent = `Saved ${myPositions.length / 3} vertices to textarea.`;
+      }
+
+      /**
+       * Loads point cloud data from the textarea (main processing logic).
+       */
+      function myLoadFromTextarea() {
+          try {
+              const myJsonString = myPointDataTextarea.value.trim();
+              if (!myJsonString) {
+                  myStatusMessage.textContent = 'Error: Textarea is empty.';
+                  return;
+              }
+
+              const myLoadedData = JSON.parse(myJsonString);
+              const myNewPositionsArray = myLoadedData.positions;
+
+              if (!Array.isArray(myNewPositionsArray) || myNewPositionsArray.length % 3 !== 0) {
+                  myStatusMessage.textContent = 'Error: Loaded data structure is invalid.';
+                  return;
+              }
+
+              myUpdatePointCloudPositions(myNewPositionsArray);
+
+          } catch (myError) {
+              myStatusMessage.textContent = `Error loading data: ${myError.message}`;
+              console.error(myError);
+          }
+      }
+
+      /**
+       * Loads a JSON file selected by the user (using async/await).
+       */
+      async function myLoadFromFile(myEvent) {
+          const myFile = myEvent.target.files[0];
+          if (!myFile) {
+              myStatusMessage.textContent = 'No file selected.';
+              return;
+          }
+          myStatusMessage.textContent = `Reading file: ${myFile.name}...`;
+          try {
+              const myFileText = await new Promise((resolve, reject) => {
+                  const myReader = new FileReader();
+                  myReader.onload = () => resolve(myReader.result);
+                  myReader.onerror = () => reject(new Error('Failed to read file.'));
+                  myReader.readAsText(myFile);
+              });
+              myPointDataTextarea.value = myFileText;
+              myLoadFromTextarea();
+              myEvent.target.value = '';
+          } catch (myError) {
+              myStatusMessage.textContent = `Error reading file: ${myError.message}`;
+              console.error(myError);
+          }
+      }
+
+      /**
+       * Downloads the current point cloud data as a JSON file.
+       */
+      function mySaveToFile() {
+          mySaveToTextarea();
+          const myJsonString = myPointDataTextarea.value;
+          const myBlob = new Blob([myJsonString], { type: 'application/json' });
+          const myUrl = URL.createObjectURL(myBlob);
+          const myLink = document.createElement('a');
+          myLink.href = myUrl;
+          myLink.download = `pointcloud-data-${Date.now()}.json`;
+          document.body.appendChild(myLink);
+          myLink.click();
+          document.body.removeChild(myLink);
+          myStatusMessage.textContent = 'Point Cloud downloaded as JSON file.';
+          URL.revokeObjectURL(myUrl);
+      }
+
+      // --- MOUSE HIGHLIGHTING FUNCTIONS ---
+
+      function myHighlightPointColor(myIndex) {
+          const myColors = myPointCloud.geometry.attributes.color;
+          if (!myColors) return;
+          myColors.setXYZ(myIndex, myHighlightColor.r, myHighlightColor.g, myHighlightColor.b);
+          myColors.needsUpdate = true;
+      }
+
+      function myRestorePointColor(myIndex) {
+          const myColors = myPointCloud.geometry.attributes.color;
+          myColors.setXYZ(myIndex, myDefaultColor.r, myDefaultColor.g, myDefaultColor.b);
+          myColors.needsUpdate = true;
+      }
+
+      function myCheckIntersections() {
+          if (!myPointCloud) return;
+          myRaycaster.setFromCamera(myMousePosition, camera);
+          const myIntersects = myRaycaster.intersectObject(myPointCloud);
+
+          if (myIntersects.length > 0) {
+              const myIntersectedPoint = myIntersects[0].index;
+              if (myHighlightedPoint !== myIntersectedPoint) {
+                  if (myHighlightedPoint !== null) { myRestorePointColor(myHighlightedPoint); }
+                  myHighlightPointColor(myIntersectedPoint);
+                  myHighlightedPoint = myIntersectedPoint;
+              }
+          } else {
+              if (myHighlightedPoint !== null) {
+                  myRestorePointColor(myHighlightedPoint);
+                  myHighlightedPoint = null;
+              }
+          }
+      }
+
+      // --- ANIMATION AND UTILITY FUNCTIONS ---
+
+      function myAnimate() {
+          requestAnimationFrame(myAnimate);
+          myCheckIntersections();
+          controls.update();
+          renderer.render(scene, camera);
+      }
+
+      function myOnWindowResize() {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // UI Update Functions
+      function mySetAutoRotate(myChecked) { controls.autoRotate = myChecked; }
+
+      /**
+       * New function to handle setting the point size on the material.
+       */
+      function mySetPointSize(mySize) {
+          document.getElementById('myPointSizeValue').textContent = mySize.toFixed(1);
+          if(myPointCloud && myPointCloud.material) {
+              myPointCloud.material.size = mySize;
+              myPointCloud.material.needsUpdate = true;
+          }
+      }
+
+      /**
+       * Event handler for the slider input (reads value and calls setter).
+       */
+      function myUpdatePointSize(myEvent) {
+          const mySize = parseFloat(myEvent.target.value);
+          mySetPointSize(mySize);
+      }
+
+      // Start the application
+      window.onload = myInit;
+    </script>
+  </body>
+</html>
