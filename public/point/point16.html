@@ -1,16 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Button-Activated JSON Point Cloud Generator</title>
+    <title>Configurable JSON Point Cloud Generator</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         h1 { font-size: 1.5em; }
         /* Minimal inline CSS preference */
+        .myControlGroup { 
+            margin-bottom: 20px; 
+            display: flex; 
+            align-items: center; 
+            gap: 15px;
+        }
+        #myPointCountInput { 
+            padding: 8px; 
+            font-size: 1em; 
+            width: 100px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px;
+        }
         #myGenerateButton { 
             padding: 10px 20px; 
             font-size: 1em; 
             cursor: pointer; 
-            background-color: #4CAF50; 
+            background-color: #007bff; /* Changed color for better contrast with the input */
             color: white; 
             border: none; 
             border-radius: 5px;
@@ -29,17 +42,40 @@
     </style>
 </head>
 <body>
-    <h1>JSON Point Cloud Generator</h1>
-    <p>Click the button to generate 5,000 points for your **myDogPointCloud.json** file.</p>
+    <h1>Configurable Point Cloud Generator</h1>
+    <p>Set the number of points and click **"Generate JSON"**.</p>
     
-    <button id="myGenerateButton" onclick="myGenerateJson()">Generate JSON</button>
+    <div class="myControlGroup">
+        <label for="myPointCountInput">Number of Points:</label>
+        <input type="number" id="myPointCountInput" value="5000" min="100" step="100" onchange="myUpdateCount()">
+        
+        <button id="myGenerateButton" onclick="myGenerateJson()">Generate JSON</button>
+    </div>
 
     <textarea id="myJsonOutput" placeholder="JSON data will appear here after you click the button."></textarea>
 
     <script>
-        // Set the desired number of points
-        const MY_TOTAL_POINTS = 5000;
+        // Use a variable to hold the point count, initialized from the input's default value
+        let myCurrentPointCount = 5000;
         
+        // Function to update the global count variable when the input field changes
+        function myUpdateCount() {
+            const myInput = document.getElementById("myPointCountInput");
+            const myValue = parseInt(myInput.value);
+            
+            // Basic validation: ensure the value is a positive number
+            if (myValue > 0) {
+                myCurrentPointCount = myValue;
+                // Clear output and reset button text when count is changed
+                document.getElementById("myJsonOutput").value = '';
+                document.getElementById("myGenerateButton").textContent = "Generate JSON";
+            } else {
+                alert("Please enter a positive number for the point count.");
+                // Resetting the input to a safe value if the user enters something invalid
+                myInput.value = myCurrentPointCount; 
+            }
+        }
+
         // Function to generate coordinates for a simple capsule/cylinder shape
         function myShapeDogBody(myNumPoints) {
             const myPositions = [];
@@ -98,7 +134,8 @@
          * Called by the button click.
          */
         async function myGenerateJson() {
-            const myPositionsData = myShapeDogBody(MY_TOTAL_POINTS);
+            // Use the globally updated count
+            const myPositionsData = myShapeDogBody(myCurrentPointCount);
 
             const myDogJson = {
                 "myPointCount": myPositionsData.length / 3,
@@ -111,11 +148,8 @@
             myOutputElement.value = JSON.stringify(myDogJson, null, 2);
             
             // Update button text to confirm action
-            document.getElementById("myGenerateButton").textContent = "JSON Generated! Copy the text.";
+            document.getElementById("myGenerateButton").textContent = `JSON Generated! (${myDogJson.myPointCount} Points)`;
         }
-        
-        // Removed the automatic call to myGenerateJson() here.
-        // The script now waits for the button click.
     </script>
 </body>
 </html>
