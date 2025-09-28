@@ -481,16 +481,19 @@
       /**
        * Updates the visual size of the points dynamically.
        */
+// Add or replace this function inside your <script> block
+
+      /**
+       * Updates the visual size of the points dynamically and updates the display span.
+       */
       function myUpdatePointSize(myEvent) {
           const myNewSize = parseFloat(myEvent.target.value);
           
+          // THIS LINE IS THE FIX: Updates the span content
           document.getElementById('my-point-size-value').textContent = myNewSize.toFixed(1);
           
           if (myPointCloud && myPointCloud.material) {
-              // KEY: Update the size property of the PointsMaterial directly
               myPointCloud.material.size = myNewSize;
-              // Note: Material updates like size and color don't usually need a full needsUpdate=true, 
-              // they are picked up in the next render cycle.
           }
       }
 
