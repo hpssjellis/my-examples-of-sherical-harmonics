@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Select-Box Configurable JSON Generator</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1 { font-size: 1.5em; }
+        /* Minimal inline CSS preference */
+        .myControlGroup { 
+            margin-bottom: 20px; 
+            display: flex; 
+            align-items: center; 
+            gap: 15px;
+        }
+        #myVertexCountSelect { 
+            padding: 8px; 
+            font-size: 1em; 
+            width: 150px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px;
+        }
+        #myGenerateButton { 
+            padding: 10px 20px; 
+            font-size: 1em; 
+            cursor: pointer; 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+        }
+        #myJsonOutput { 
+            width: 100%; 
+            height: 500px; 
+            margin-top: 15px; 
+            padding: 10px; 
+            font-family: monospace; 
+            font-size: 0.9em; 
+            white-space: pre; 
+            overflow: auto; 
+            border: 1px solid #ccc; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Standard Three.js JSON Generator</h1>
+    <p>Select the desired level of detail and click **"Generate JSON"**.</p>
+    
+    <div class="myControlGroup">
+        <label for="myVertexCountSelect">Detail Level:</label>
+        
+        <select id="myVertexCountSelect">
+            <option value="289">Low (289 vertices)</option>
+            <option value="1089" selected>Medium (1089 vertices)</option>
+            <option value="4225">High (4225 vertices)</option>
+        </select>
+        
+        <button id="myGenerateButton" onclick="myGenerateJson()">Generate JSON</button>
+    </div>
+
+    <textarea id="myJsonOutput" placeholder="JSON data will appear here after you click the button."></textarea>
+
+    <script>
+        /**
+         * Generates XYZ coordinates for a simple dog-like capsule shape.
+         */
+        function myShapeDogBody(myNumPoints) {
+            const myPositions = [];
+            
+            // Parameters for the capsule shape
+            const myBodyRadius = 1.0;
+            const myBodyLength = 2.5;
+            const myHeadOffset = 0.5;
+            let myCount = 0;
+
+            // Loop until we have enough points (using a while loop to ensure we hit the target count)
+            while (myCount < myNumPoints) {
+                let myX = (Math.random() * 2 - 1) * myBodyLength / 2;
+                let myY = (Math.random() * 2 - 1) * myBodyRadius;
+                let myZ = (Math.random() * 2 - 1) * myBodyRadius;
+
+                let myIncludePoint = false;
+                
+                // Simple capsule shape generation logic
+                if (Math.abs(myX) <= myBodyLength / 2 - myBodyRadius) {
+                    if (myY * myY + myZ * myZ <= myBodyRadius * myBodyRadius) {
+                        myIncludePoint = true;
+                    }
+                } else {
+                    let myEndDist = Math.abs(myX) - (myBodyLength / 2 - myBodyRadius);
+                    if (myEndDist * myEndDist + myY * myY + myZ * myZ <= myBodyRadius * myBodyRadius) {
+                        myIncludePoint = true;
+                    }
+                }
+                
+                // Add a small, randomized cluster for a "head"
+                if (Math.random() < 0.05) { 
+                     myX = myBodyLength / 2 + myHeadOffset + (Math.random() * 0.4 - 0.2);
+                     myY = Math.random() * 0.5;
+                     myZ = Math.random() * 0.5 - 0.25;
+                     myIncludePoint = true;
+                }
+                
+                if (myIncludePoint) {
+                    // Store positions with 3 decimal places for a smaller file size
+                    myPositions.push(
+                        parseFloat(myX.toFixed(3)), 
+                        parseFloat(myY.toFixed(3)),
+                        parseFloat(myZ.toFixed(3))
+                    );
+                    myCount++;
+                }
+            }
+            return myPositions;
+        }
+
+        /**
+         * Main function to build and display the JSON in the textarea.
+         * Called by the static 'onclick' attribute on the button.
+         */
+        async function myGenerateJson() {
+            // Get the selected value from the select box
+            const mySelectElement = document.getElementById("myVertexCountSelect");
+            const myTargetVertexCount = parseInt(mySelectElement.value);
+
+            // Generate the points
+            const myPositionsData = myShapeDogBody(myTargetVertexCount);
+            const myFinalVertexCount = myPositionsData.length / 3;
+
+            // Use the desired standard JSON structure
+            const myDogJson = {
+                "metadata": "Three.js Deformed Point Cloud Positions (X, Y, Z coordinates)",
+                "vertexCount": myFinalVertexCount,
+                "positions": myPositionsData 
+            };
+
+            const myOutputElement = document.getElementById("myJsonOutput");
+            
+            // Format the JSON with 2-space indentation for readability
+            myOutputElement.value = JSON.stringify(myDogJson, null, 2);
+            
+            // Give feedback to the user
+            document.getElementById("myGenerateButton").textContent = `JSON Generated! (${myFinalVertexCount} Vertices)`;
+        }
+    </script>
+</body>
+</html>
