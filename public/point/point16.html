@@ -1,11 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>JSON Point Cloud Generator</title>
+    <title>Button-Activated JSON Point Cloud Generator</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         h1 { font-size: 1.5em; }
         /* Minimal inline CSS preference */
+        #myGenerateButton { 
+            padding: 10px 20px; 
+            font-size: 1em; 
+            cursor: pointer; 
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+        }
         #myJsonOutput { 
             width: 100%; 
             height: 500px; 
@@ -20,9 +29,12 @@
     </style>
 </head>
 <body>
-    <h1>Copy the JSON Output Below</h1>
-    <p>This script generates 5,000 points in a simple capsule shape for your Three.js dog point cloud.</p>
-    <textarea id="myJsonOutput"></textarea>
+    <h1>JSON Point Cloud Generator</h1>
+    <p>Click the button to generate 5,000 points for your **myDogPointCloud.json** file.</p>
+    
+    <button id="myGenerateButton" onclick="myGenerateJson()">Generate JSON</button>
+
+    <textarea id="myJsonOutput" placeholder="JSON data will appear here after you click the button."></textarea>
 
     <script>
         // Set the desired number of points
@@ -36,65 +48,74 @@
             const myBodyRadius = 1.0;
             const myBodyLength = 2.5;
             const myHeadOffset = 0.5;
+            let myCount = 0;
 
-            for (let i = 0; i < myNumPoints; i++) {
-                // Generate a random position (x, y, z) inside the bounding box
-                let myX = (Math.random() * 2 - 1) * myBodyLength / 2; // -1.25 to 1.25
-                let myY = (Math.random() * 2 - 1) * myBodyRadius;     // -1.0 to 1.0
-                let myZ = (Math.random() * 2 - 1) * myBodyRadius;     // -1.0 to 1.0
+            // Loop until we have enough points
+            while (myCount < myNumPoints) {
+                let myX = (Math.random() * 2 - 1) * myBodyLength / 2;
+                let myY = (Math.random() * 2 - 1) * myBodyRadius;
+                let myZ = (Math.random() * 2 - 1) * myBodyRadius;
 
-                // Simple check to keep points roughly within a cylinder/capsule shape
-                // This simulates the main body
-                if (Math.abs(myX) < myBodyLength / 2 - myBodyRadius) {
-                    // Inside the middle part of the cylinder
-                    if (myY * myY + myZ * myZ > myBodyRadius * myBodyRadius) {
-                        continue; // Skip points outside the circle cross-section
+                let myIncludePoint = false;
+                
+                // Check if inside the main body cylinder
+                if (Math.abs(myX) <= myBodyLength / 2 - myBodyRadius) {
+                    if (myY * myY + myZ * myZ <= myBodyRadius * myBodyRadius) {
+                        myIncludePoint = true;
                     }
-                } else {
-                    // Ends of the cylinder (spherical caps)
-                    let myEndDistSq = (Math.abs(myX) - (myBodyLength / 2 - myBodyRadius));
-                    if (myEndDistSq * myEndDistSq + myY * myY + myZ * myZ > myBodyRadius * myBodyRadius) {
-                         continue; // Skip points outside the spherical end
+                } 
+                // Check if inside the spherical caps at the ends
+                else {
+                    let myEndDist = Math.abs(myX) - (myBodyLength / 2 - myBodyRadius);
+                    if (myEndDist * myEndDist + myY * myY + myZ * myZ <= myBodyRadius * myBodyRadius) {
+                        myIncludePoint = true;
                     }
                 }
                 
                 // Add a small cluster for a "head" near one end (positive X)
-                if (Math.random() < 0.1) { // 10% chance to place a "head" point
+                if (Math.random() < 0.05) { 
                      myX = myBodyLength / 2 + myHeadOffset + (Math.random() * 0.4 - 0.2);
-                     myY = Math.random() * 0.5; // Slightly higher
-                     myZ = Math.random() * 0.5 - 0.25; // Slightly off center
+                     myY = Math.random() * 0.5;
+                     myZ = Math.random() * 0.5 - 0.25;
+                     myIncludePoint = true;
                 }
-
-                // Add the position to the array
-                myPositions.push(
-                    parseFloat(myX.toFixed(3)), // Use toFixed(3) for smaller file size
-                    parseFloat(myY.toFixed(3)),
-                    parseFloat(myZ.toFixed(3))
-                );
-
-                // Stop if we have generated enough points
-                if (myPositions.length / 3 >= myNumPoints) break;
+                
+                if (myIncludePoint) {
+                    // Add the position to the array
+                    myPositions.push(
+                        parseFloat(myX.toFixed(3)), 
+                        parseFloat(myY.toFixed(3)),
+                        parseFloat(myZ.toFixed(3))
+                    );
+                    myCount++;
+                }
             }
-
             return myPositions;
         }
 
-        // Main function to build and display the JSON
+        /**
+         * Main function to build and display the JSON.
+         * Called by the button click.
+         */
         async function myGenerateJson() {
-            const myPositionsArray = myShapeDogBody(MY_TOTAL_POINTS);
+            const myPositionsData = myShapeDogBody(MY_TOTAL_POINTS);
 
             const myDogJson = {
-                "myPointCount": myPositionsArray.length / 3,
-                "myPositionsArray": myPositionsArray
+                "myPointCount": myPositionsData.length / 3,
+                "myPositionsArray": myPositionsData 
             };
 
             const myOutputElement = document.getElementById("myJsonOutput");
             
             // Format the JSON with 2-space indentation for readability
             myOutputElement.value = JSON.stringify(myDogJson, null, 2);
+            
+            // Update button text to confirm action
+            document.getElementById("myGenerateButton").textContent = "JSON Generated! Copy the text.";
         }
-
-        myGenerateJson();
+        
+        // Removed the automatic call to myGenerateJson() here.
+        // The script now waits for the button click.
     </script>
 </body>
 </html>
