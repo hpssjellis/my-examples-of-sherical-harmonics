@@ -310,7 +310,8 @@
       let wave3_freq_theta = 5.0;
       let wave3_freq_phi = 8.0;
       let wave3_speed = -0.6;
-
+      let wave3_freq_phi = 8.0;
+      let wave3_speed = -0.6;
 
       // Sphere segment configurations for different resolutions
       let segments = {
@@ -399,6 +400,32 @@
               myDebugInfo.querySelector('span').textContent = `Error: ${error.message}. Please refresh the page.`;
           }
       }
+
+
+          // NEW: Function to force all slider labels to display the current global variable values
+    function myInitializeSliderValues() {
+        // Point Size
+        const myPointSize = parseFloat(document.getElementById('my-point-size-slider')?.value || 2.0);
+        document.getElementById('my-point-size-value').textContent = myPointSize.toFixed(1);
+        
+        // Wave 1
+        document.getElementById('wave1-amplitude-value').textContent = wave1_amplitude.toFixed(1);
+        document.getElementById('wave1-freq-theta-value').textContent = wave1_freq_theta.toFixed(1);
+        document.getElementById('wave1-freq-phi-value').textContent = wave1_freq_phi.toFixed(1);
+        document.getElementById('wave1-speed-value').textContent = wave1_speed.toFixed(2);
+
+        // Wave 2
+        document.getElementById('wave2-amplitude-value').textContent = wave2_amplitude.toFixed(1);
+        document.getElementById('wave2-freq-theta-value').textContent = wave2_freq_theta.toFixed(1);
+        document.getElementById('wave2-freq-phi-value').textContent = wave2_freq_phi.toFixed(1);
+        document.getElementById('wave2-speed-value').textContent = wave2_speed.toFixed(2);
+
+        // Wave 3
+        document.getElementById('wave3-amplitude-value').textContent = wave3_amplitude.toFixed(1);
+        document.getElementById('wave3-freq-theta-value').textContent = wave3_freq_theta.toFixed(1);
+        document.getElementById('wave3-freq-phi-value').textContent = wave3_freq_phi.toFixed(1);
+        document.getElementById('wave3-speed-value').textContent = wave3_speed.toFixed(2);
+    }
 
       /**
        * Creates or recreates the point cloud object. 
@@ -901,8 +928,11 @@
           }
       }
 
-      // Start the application
-      window.onload = myInit;
+    // Start the application
+    window.onload = function() {
+        myInitializeSliderValues(); // 👈 CALL THIS FIRST
+        myInit(); 
+    };
     </script>
   </body>
 </html>
